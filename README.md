@@ -79,17 +79,34 @@ hostname = %APPEND% example.com, *.foo.com
 
 方案 B 会解密全部 HTTPS 流量，**证书固定（pinning）的 App 可能直接断网**，且日志量、耗电都会上升，请自行权衡。
 
-### 验证：打开自检页
+### 验证：三种看状态的方式
 
-浏览器打开 **`http://vibeheader.local/`**（明文 http，**不需要 MITM**，随时可用）：
+**① 最可靠：在 Surge 里长按运行（推荐）**
 
-- 总开关 / 调试开关 / 排除域名
-- 每条规则的解析结果：状态、作用域、动作、头名、值
-- **语法错误清单**（写错哪一行、错在哪）
-- 最近 20 次命中记录（需先打开调试开关）
-- `http://vibeheader.local/reset` 清空命中记录
+Surge → **脚本** → 找到 **VibeHeaderStatus** → **长按 → 运行**。手机会弹一条通知，把总开关、规则条数、语法问题、最近命中一次列全。**不依赖浏览器、不依赖域名解析、不依赖 MITM**，装了模块就能用。
 
-此外模块每天 9 点自检一次配置，**只在语法有错时发通知**；`VibeHeaderSelfCheck` 那行也可以直接删掉。
+**② 万能触发：用浏览器访问任意明文 http 网址**
+
+打开任意一个**能正常解析的真实域名**的 `http://` 网址，把路径写成 `/vibeheader-status`，例如 `http://neverssl.com/vibeheader-status`。页面会照常打开，同时弹出一条状态通知。（请求本身不做任何修改）
+
+**③ 自检页（辅助）**
+
+浏览器打开 **`http://vibeheader.local/`**（明文 http，不需要 MITM）：总开关 / 调试开关 / 排除域名、每条规则的解析结果、**语法错误清单**、最近 20 次命中；`/reset` 清空命中记录。
+
+> ⚠️ 已知问题：这个假域名页面在部分设备上会出现「Surge 里显示 200、浏览器却一片空白」，原因未完全定位（已做 `body` / `data` 双字段兼容兜底）。**优先用 ① 或 ②。**
+
+**④ 信息面板（可选，需要你自己加配置）**
+
+信息面板更直观（iOS 上显示在**策略选择视图**里），但**模块不能定义 `[Panel]` 段**，需要你在自己的配置里加一行：
+
+```ini
+[Panel]
+VibeHeader = title="VibeHeader",content="点刷新读取状态",style=info,script-name=VibeHeaderStatus,update-interval=1
+```
+
+`VibeHeaderStatus` 就是模块里那条 `type=generic` 脚本行（模块已提供，不用重复声明）。
+
+此外模块每天 9 点自检一次配置，**只在语法有错时发通知**；`VibeHeaderSelfCheck` 那行可以直接删掉。
 
 ---
 
@@ -177,7 +194,9 @@ api.example.com/v1 add X-Vibe-By: surge
 | 现象 | 原因与处理 |
 | --- | --- |
 | 规则全都不生效 | 没开 MITM 或域名没进 MITM 列表；先打开调试开关，看自检页「最近命中」是否有记录 |
-| 自检页打不开 | `force-http-engine-hosts` 未生效（模块未启用），或客户端把 `*.local` 直连了 |
+| 自检页拿到 200 却是空白页 | 已知问题（见「验证」一节），改用长按运行或 `/vibeheader-status` |
+| 长按运行 VibeHeaderStatus 没反应 | 该行是否出现在 Surge 的脚本列表里；看不到就用「万能触发」，或把那一行复制到你自己的配置里 |
+| 万能触发不弹通知 | 路径必须完全匹配 `/vibeheader-status`；且要用**明文 http** 的网址打开 |
 | 只有明文 http 生效 | 目标域名不在 MITM 列表 —— 这就是预期行为 |
 | 自检页显示「0 条可用」 | 规则行还带着 `#`，或格式不对；看页面上的语法错误清单 |
 | 某个头怎么都不变 | 它是受保护头（`Host` / `Content-Length` / `Content-Encoding` / `Transfer-Encoding` 等），脚本拒绝修改以免破坏报文 |
@@ -201,7 +220,7 @@ api.example.com/v1 add X-Vibe-By: surge
 | 文件 | 作用 |
 | --- | --- |
 | `vibe-header.js` | 核心脚本（http-request 类型）：读配置 → 匹配域名 → 改请求头；同时提供自检页与 cron 自检模式 |
-| `VibeHeader.sgmodule` | Surge 模块：注册脚本行、`force-http-engine-hosts`、MITM 域名列表 |
+| `VibeHeader.sgmodule` | Surge 模块：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`force-http-engine-hosts`、MITM 域名列表 |
 | `boxjs.vibeheader.json` | BoxJs 订阅文件：导入后得到可视化配置面板 |
 | `README.md` | 本文档 |
 

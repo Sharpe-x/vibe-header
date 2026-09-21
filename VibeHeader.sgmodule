@@ -18,7 +18,8 @@
 # =============================================================================
 
 [General]
-# 让自检页 http://vibeheader.local/ 一定走 Surge 的 HTTP 引擎
+# 明文 HTTP 的 80 端口本来就会被 Surge 自动嗅探进 HTTP 引擎（官方文档），这行只在你想用
+# 非标准端口访问自检页时才必要；保留它无害，不影响任何其它域名。
 force-http-engine-hosts = %APPEND% vibeheader.local
 
 [Script]
@@ -31,6 +32,11 @@ VibeHeader = type=http-request,pattern=^https?://,script-path=https://raw.github
 
 # ② 可选：每天 9 点自检一次配置，只在语法写错时发通知（不需要可直接删掉这行）
 VibeHeaderSelfCheck = type=cron,cronexp="0 9 * * *",script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=check
+
+# ③ 看状态（推荐，不依赖浏览器）：在 Surge 的「脚本」列表里长按 VibeHeaderStatus → 运行，
+#    会弹一条通知，把总开关 / 规则条数 / 语法问题 / 最近命中一次列全。
+#    若列表里找不到这条，改用「万能触发」：浏览器打开任意明文 http 网址，把路径写成 /vibeheader-status
+VibeHeaderStatus = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status
 
 [MITM]
 # ⚠️ 必改：只有写在这里的域名，其 HTTPS 请求才会被解密，规则才可能生效。

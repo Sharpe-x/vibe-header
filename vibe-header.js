@@ -16,16 +16,21 @@
  *   /            查看总开关、规则解析结果、语法错误、最近命中
  *   /reset       清空「最近命中」记录
  *
+ * 看状态（不依赖浏览器，更可靠）：
+ *   ① 模块里的 VibeHeaderStatus 行（type=generic）→ 在 Surge 的「脚本」列表长按运行 → 弹通知
+ *   ② 浏览器访问任意明文 http 网址的 /vibeheader-status 路径 → 同样弹通知，请求照常放行
+ *   ③ 作为 Surge 信息面板脚本时（$input.purpose === 'panel'）返回面板内容
+ *
  * 自检模式：当模块脚本行带 argument=check（cron 触发）时，仅做配置校验，
  *          只在发现语法错误时发通知，成功时静默。
  *
- * 版本：1.0.0
+ * 版本：1.1.0
  */
 
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
   var LOCAL_HOST = 'vibeheader.local';
   var MAX_RECENT = 20;
 
@@ -419,6 +424,67 @@
   }
 
   // ==========================================================================
+  // 状态输出（不依赖浏览器的出口）
+  //   出口一：Surge「脚本」列表里长按本脚本手动运行（模块里那条 argument=status 的 generic 行）
+  //   出口二：浏览器访问任意明文 http 网址的 /vibeheader-status 路径（请求本身照常放行）
+  //   出口三（可选）：作为 Surge 信息面板的脚本（$input.purpose === 'panel'）
+  //   三者都调用 reportStatus()：发一条通知 + 返回面板对象
+  // ==========================================================================
+
+  function statusText() {
+    var enable = flag(K_ENABLE, true);
+    var debug = flag(K_LOG, false);
+    var rulesText = raw(K_RULES) || '';
+    var cfg = parseRules(rulesText);
+    var blocks = parseList(raw(K_BLOCK));
+    var recent = readRecent();
+    var onCount = 0;
+    for (var i = 0; i < cfg.rules.length; i++) if (cfg.rules[i].on) onCount++;
+
+    var lines = [];
+    lines.push('总开关：' + (enable ? '开' : '关'));
+    lines.push('规则：' + cfg.rules.length + ' 条解析成功（其中启用 ' + onCount + ' 条）');
+    lines.push('排除域名：' + blocks.length + ' 个');
+    lines.push('调试日志：' + (debug ? '开' : '关'));
+
+    if (cfg.errors.length) {
+      lines.push('');
+      lines.push('⚠️ 语法问题 ' + cfg.errors.length + ' 处：');
+      for (var e = 0; e < cfg.errors.length && e < 5; e++) lines.push('· ' + cfg.errors[e]);
+    }
+    if (!rulesText) { lines.push(''); lines.push('⚠️ 规则为空，请到 BoxJs 配置'); }
+    if (blocks.length) { lines.push(''); lines.push('排除：' + blocks.map(function (b) { return b.raw; }).join(', ')); }
+
+    lines.push('');
+    lines.push('最近命中（' + recent.length + ' 条）：');
+    if (!recent.length) {
+      lines.push(debug ? '（暂无，去触发一次目标请求）' : '（需先打开调试日志才会记录）');
+    } else {
+      var tail = recent.slice(-5).reverse();
+      for (var k = 0; k < tail.length; k++) {
+        var it = tail[k] || {};
+        lines.push(it.t + ' ' + it.m + ' ' + (it.h || '') + (it.p || '') + ' → ' + it.o + ' ' + it.n + (it.v ? '=' + it.v : ''));
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * asPanel=true 时同时返回面板对象（$done({title,content,style})）；
+   * 手动运行 generic 脚本 / 万能路径触发时只发通知，并让请求照常放行。
+   */
+  function reportStatus(asPanel) {
+    var t = statusText();
+    log('[VibeHeader] 状态\n' + t);
+    notify('VibeHeader 状态', '', t);
+    if (asPanel) {
+      var hasErr = /⚠️/.test(t);
+      return done({ title: 'VibeHeader', content: t, style: hasErr ? 'alert' : 'info' });
+    }
+    return done({});
+  }
+
+  // ==========================================================================
   // 请求处理主流程
   // ==========================================================================
 
@@ -430,6 +496,9 @@
 
     // 自检页
     if (ctx.host === LOCAL_HOST) return renderPage(ctx);
+
+    // 万能触发：任意明文 http 网址的 /vibeheader-status 路径 → 弹通知报状态，请求照常放行
+    if (/\/vibeheader-status\/?$/i.test(ctx.path)) return reportStatus(false);
 
     var debug = flag(K_LOG, false);
 
@@ -580,11 +649,15 @@
 
     h.push('</body></html>');
 
+    var html = h.join('');
     return done({
       response: {
         status: 200,
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-        body: h.join('')
+        // body 是 Surge 文档定义的字段；额外带一份 data 作为兼容兜底
+        // （有反馈「浏览器拿到 200 但页面全白」，怀疑某些版本不认 body 字段）
+        body: html,
+        data: html
       }
     });
   }
@@ -619,7 +692,9 @@
 
   try {
     var ARG = (typeof $argument !== 'undefined' && $argument !== null) ? String($argument) : '';
-    if (/\bcheck\b/i.test(ARG)) selfCheck();
+    var IS_PANEL = (typeof $input !== 'undefined' && $input && $input.purpose === 'panel');
+    if (IS_PANEL || /\bstatus\b/i.test(ARG)) reportStatus(IS_PANEL);
+    else if (/\bcheck\b/i.test(ARG)) selfCheck();
     else handleRequest();
   } catch (e) {
     log('[VibeHeader] 运行异常：' + (e && e.stack ? e.stack : e));
