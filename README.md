@@ -114,7 +114,16 @@ VibeHeader = title="VibeHeader",content="点刷新读取状态",style=info,scrip
 
 一行一条：`作用域 动作 头名 值`
 
-### 作用域（可逗号分隔多个，满足任一即生效）
+### 作用域（可写多个，满足任一即生效）
+
+多个作用域用**逗号或空格**分隔（逗号后的空格可有可无），也可以拆成多行 —— 三者完全等价：
+
+```text
+*.a.com, *.b.com set X-Demo: 1     # 一行多个作用域
+a.com b.com set X-Demo: 1          # 空格分隔
+*.a.com set X-Demo: 1              # 拆成多行（等价）
+*.b.com set X-Demo: 1
+```
 
 | 写法 | 含义 |
 | --- | --- |

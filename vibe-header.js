@@ -248,6 +248,26 @@
     return OP_ALIAS[s] || null;
   }
 
+  /**
+   * 把一行 DSL 切成 { scope, op, name, value }。
+   *
+   * 不能简单地「按空白取第一段当作用域、第二段当动作」—— 作用域本身可能是
+   * 逗号/空格分隔的多个 token（例如 `*.a.com, *.b.com set X: 1`），
+   * 那样第二段会变成 `*.b.com,` 被误判成非法动作。
+   * 所以改成**先定位动作词**：它之前的是作用域，之后第一个词是头名，剩下的是值。
+   * 动作词必须位于行首或紧跟空白、且后面也是空白，避免误匹配域名/值里出现的 set / add / del。
+   */
+  var OP_WORD = /(?:^|\s)(set|add|del|覆盖|设置|追加|添加|删除)\s+(\S[\s\S]*)$/i;
+
+  function splitRuleLine(line) {
+    var m = OP_WORD.exec(line);
+    if (!m) return null;
+    var scope = line.slice(0, m.index).trim();
+    var nm = /^([^\s=:]+)\s*(?:[:=]\s*)?([\s\S]*)$/.exec(m[2]);
+    if (!nm) return null;
+    return { scope: scope, op: m[1], name: nm[1], value: nm[2] };
+  }
+
   function pushRule(out, errors, label, o) {
     var tokens = [];
     if (o.scope instanceof Array) tokens = o.scope;
@@ -308,8 +328,8 @@
     }
 
     // ---- 多行文本 DSL：<作用域> <动作> <头名> <值> ----
+    // 作用域支持逗号 / 空格分隔多个，逗号后的空格可有可无（靠 splitRuleLine 定位动作词）
     var lines = body.split(/\r?\n/);
-    var re = /^(\S+)\s+(\S+)\s+([^\s=:]+)\s*(?:[:=]\s*)?([\s\S]*)$/;
     for (var j = 0; j < lines.length; j++) {
       var line = lines[j].trim();
       if (!line || line.charAt(0) === '#' || line.slice(0, 2) === '//') continue;
@@ -317,22 +337,22 @@
       var on2 = true;
       if (line.charAt(0) === '!') { on2 = false; line = line.slice(1).trim(); }
 
-      var m = re.exec(line);
-      if (!m) {
-        errors.push('第 ' + (j + 1) + ' 行：格式应为「作用域 动作 头名 值」，当前：' + line);
+      var sp = splitRuleLine(line);
+      if (!sp) {
+        errors.push('第 ' + (j + 1) + ' 行：找不到动作词，格式应为「作用域 动作 头名 值」，动作只能是 set / add / del；当前：' + line);
         continue;
       }
-      var op2 = toOp(m[2]);
+      var op2 = toOp(sp.op);
       if (!op2) {
-        errors.push('第 ' + (j + 1) + ' 行：动作「' + m[2] + '」不支持，只能是 set / add / del');
+        errors.push('第 ' + (j + 1) + ' 行：动作「' + sp.op + '」不支持，只能是 set / add / del');
         continue;
       }
       pushRule(rules, errors, '第 ' + (j + 1) + ' 行', {
         on: on2,
         op: op2,
-        name: m[3].trim(),
-        value: stripQuotes(m[4]),
-        scope: m[1],
+        name: sp.name.trim(),
+        value: stripQuotes(sp.value),
+        scope: sp.scope,
         raw: line
       });
     }
