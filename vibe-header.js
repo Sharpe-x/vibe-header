@@ -41,7 +41,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.3.0';
+  var VERSION = '1.4.1';
 
   /**
    * 自检页入口主机名（三个都接受，任选一个能打开的用）。
@@ -530,6 +530,7 @@
     var quick = quickRuleText().trim();
 
     var lines = [];
+    lines.push('版本：v' + VERSION + '（脚本更新后这里会变，可用来判断有没有生效）');
     lines.push('总开关：' + (enable ? '开' : '关'));
     lines.push('快速规则：' + (quick || '未启用（去 BoxJs 保存一次即生效）'));
     lines.push('规则：' + cfg.rules.length + ' 条解析成功（其中启用 ' + onCount + ' 条）');
@@ -737,7 +738,9 @@
 
     h.push('<h2>排查提示</h2>');
     h.push('<div class="tip">1. <b>HTTPS 必须 MITM</b>：只有加入 Surge MITM hostname 列表的域名，脚本才能看到其请求；明文 http 不需要。<br>' +
-      '2. <b>一个请求只会运行一个 http-request 脚本</b>：本模块 pattern 为全局时，会抢占 Cookie 抓取类脚本，建议把 pattern 收窄到目标域名。<br>' +
+      '2. <b>一个请求只会运行一个 http-request 脚本</b>（先匹配到的胜出）。本模块的 pattern 已用否定断言' +
+      '把 <code>boxjs.com</code> / <code>boxjs.net</code> 让回给 BoxJs；若你还装了其它 http-request 脚本' +
+      '（Cookie 抓取、其它重写），需要把它的域名也加进模块 pattern 的否定列表，否则那类脚本会失效。<br>' +
       '3. 规则改了立刻生效，不需要重启 Surge；但 <b>已在连接中的会话</b>不受影响。<br>' +
       '4. 头部如 Host / Content-Length 等属于受保护头，规则不会生效。<br>' +
       '5. <b>本页打不开</b>时换另一个入口试（都指向同一个页面）：' +
@@ -747,7 +750,11 @@
       '<code>http://' + escHtml(LOCAL_HOST) + '/</code>。<br>' +
       '&nbsp;&nbsp;&nbsp;这几个域名靠模块里的 <code>[Host]</code> 映射解析到测试 IP，' +
       '不依赖真实 DNS。若都打不开：确认模块已启用，或直接在 Surge 里搜 <code>vibeheader.com</code> ' +
-      '看那条请求的状态。</div>');
+      '看那条请求的状态。<br>' +
+      '6. <b>想更新到新版本</b>（不用删除重装）：<br>' +
+      '&nbsp;&nbsp;&nbsp;· 模块本身 —— Surge 首页 →「模块」→ 在 VibeHeader 上<b>向左滑</b> →「更新」；<br>' +
+      '&nbsp;&nbsp;&nbsp;· 脚本（多数改动都在脚本里）—— Surge 首页左上角<b>配置名称</b> →「配置列表」→「外部资源」→ 底部<b>「全部更新」</b>。' +
+      '模块里的 <code>script-update-interval</code> 也会自动检查更新。</div>');
 
     h.push('</body></html>');
 

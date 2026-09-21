@@ -1,5 +1,5 @@
 #!name=VibeHeader 信息面板
-#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到总开关、规则条数、语法问题和最近命中。
+#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到版本、总开关、规则条数、语法问题和最近命中。｜ 模块 v1.4.1
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
@@ -10,13 +10,14 @@
 #   · 面板内容由 vibe-header.js 以 argument=status 模式渲染
 #   · 自包含：脚本行随模块一起提供，不需要另外装 VibeHeader 主模块
 #
+# 更新方式（不用删除重装）：Surge →「模块」→ 在模块上向左滑 →「更新」
 # 官方文档里「模块可覆盖的段落」清单没有列 [Panel]，但实测模块里写 [Panel] 是生效的。
 # =============================================================================
 
 [Script]
-# script-update-interval=300：远程脚本默认缓存 24 小时，写小一点才能尽快拿到新版脚本。
-#   想立刻刷新就临时改成 60，等一分钟；确认没问题后可以改成 3600 减少请求。
-#   （面板若一直停在「点刷新读取状态」不动，基本就是脚本还停留在旧版缓存里。）
+# script-update-interval=300：远程脚本默认缓存 24 小时，这里让面板脚本每 5 分钟检查一次更新，
+#   这样脚本一改你就能看到，不必手动刷新。想立刻生效：首页左上角「配置名称」→「配置列表」
+#   →「外部资源」→ 底部「全部更新」。（面板若一直停在「点刷新读取状态」不动，就是脚本还是旧版。）
 VibeHeaderPanel = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status,script-update-interval=300
 
 [Panel]

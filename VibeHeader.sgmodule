@@ -1,5 +1,5 @@
 #!name=VibeHeader（请求头管理器）
-#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://vibeheader.com/
+#!desc=像 Chrome 的 VibeHeader 插件一样按域名/路径对请求头做增删改，配置在 BoxJs。自检页 http://vibeheader.com/ ｜ 模块 v1.4.1（已修复抢占 BoxJs 请求的问题）
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
@@ -12,10 +12,11 @@
 #
 # ⚠️ 使用前必读两条硬性前提
 #   1) HTTPS 请求必须先被 MITM 解密，脚本才能看到它 —— 见文末 [MITM]
-#   2) Surge 对每个请求只会运行「一个」http-request 脚本（先匹配到的胜出）。
-#      下面 pattern 写成 ^https?:// 时，本模块会抢占 Cookie 抓取 / 其他重写脚本。
-#      如果你还装了那类脚本，请把 pattern 收窄到目标域名，例如：
-#        pattern=^https?://([^/]+\.)?(example\.com|foo\.com)/
+#   2) Surge 对每个请求只会运行「一个」http-request 脚本：**先匹配到的胜出**。
+#      模块里的脚本行会被插到配置最顶部，所以 pattern 划得越宽，越容易把别人的脚本挤掉。
+#      本模块已用否定断言把 boxjs.com / boxjs.net 让回给 BoxJs（否则 BoxJs 会
+#      「能打开页面但加载数据失败 / 保存失败」）。若你还装了其它 http-request 脚本
+#      （Cookie 抓取、其它重写），把它的域名加进那个否定列表，见 pattern 上方注释。
 # =============================================================================
 
 [Host]
@@ -37,20 +38,37 @@ vibeheader.local = 192.0.2.1
 force-http-engine-hosts = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, 192.0.2.1
 
 [Script]
-# 脚本地址二选一（国内若 raw 域名不通，把下面两行的地址换成 jsDelivr 那版即可）：
+# 脚本地址二选一（国内若 raw 域名不通，把下面三行的地址换成 jsDelivr 那版即可）：
 #   raw      https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js
 #   jsDelivr https://cdn.jsdelivr.net/gh/Sharpe-x/vibe-header@main/vibe-header.js
+#
+# script-update-interval=3600：远程脚本的自动更新检查间隔（秒），官方默认 86400（24 小时）。
+#   写 3600 = 最多一小时自动取一次新版脚本，所以**脚本改动你什么都不用做**。
+#   想立刻生效：Surge 首页左上角「配置名称」→「配置列表」→「外部资源」→ 底部「全部更新」。
+#   调试期可临时改成 60。注意这个参数只管脚本；模块本身的改动仍需刷新模块
+#   （Surge →「模块」→ 向左滑该模块 →「更新」），详见 README「更新」一节。
 
 # ① 主脚本：按规则改请求头（同时负责应答自检页）
-VibeHeader = type=http-request,pattern=^https?://,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,requires-body=false
+#
+# ⚠️ 为什么 pattern 不是简单的 ^https?://
+#   Surge 对每个请求**只运行一个** http-request 脚本（"the first enabled http-request script in the
+#   profile whose pattern matches wins"），而模块里的脚本行会被插到配置最顶部。
+#   所以一个全局 pattern 会**抢占 BoxJs 自己的脚本**，导致 BoxJs 能打开页面却
+#   「加载数据失败 / 无法保存 / 开关打不动」—— 因为它的后端脚本根本没跑。
+#   下面的否定断言 (?!) 就是把 boxjs.com / boxjs.net 让回给 BoxJs。
+#
+#   还要排除别的脚本？把域名塞进同一组，用 | 连接即可，例如：
+#     (?!([^/]+\.)?(boxjs\.(com|net)|someapp\.com)(?:[/:]|$))
+#   如果你不用 BoxJs（或不用其它 http-request 脚本），也可以直接换回 ^https?://
+VibeHeader = type=http-request,pattern=^https?://(?!([^/]+\.)?boxjs\.(com|net)(?:[/:]|$)),script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,requires-body=false,script-update-interval=3600
 
 # ② 可选：每天 9 点自检一次配置，只在语法写错时发通知（不需要可直接删掉这行）
-VibeHeaderSelfCheck = type=cron,cronexp="0 9 * * *",script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=check
+VibeHeaderSelfCheck = type=cron,cronexp="0 9 * * *",script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=check,script-update-interval=3600
 
 # ③ 看状态（推荐，不依赖浏览器）：在 Surge 的「脚本」列表里长按 VibeHeaderStatus → 运行，
-#    会弹一条通知，把总开关 / 规则条数 / 语法问题 / 最近命中一次列全。
+#    会弹一条通知，把版本 / 总开关 / 规则条数 / 语法问题 / 最近命中一次列全。
 #    若列表里找不到这条，改用「万能触发」：浏览器打开任意明文 http 网址，把路径写成 /vibeheader-status
-VibeHeaderStatus = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status
+VibeHeaderStatus = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status,script-update-interval=3600
 
 [MITM]
 # ⚠️ 必改：只有写在这里的域名，其 HTTPS 请求才会被解密，规则才可能生效。

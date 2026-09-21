@@ -16,10 +16,38 @@ https://github.com/Sharpe-x/vibe-header
 | 前提 | 说明 |
 | --- | --- |
 | ① HTTPS 需要 MITM | 只有写进 Surge `[MITM] hostname` 的域名，脚本才能看到它的 HTTPS 请求。明文 http 不需要 MITM |
-| ② 一个请求只跑一个 http-request 脚本 | Surge 对同一请求**只运行最先匹配的 http-request 脚本**。本模块 pattern 是 `^https?://`，会抢占 Cookie 抓取等脚本，需要时请收窄 pattern |
+| ② 一个请求只跑一个 http-request 脚本 | Surge 对同一请求**只运行最先匹配的 http-request 脚本**（官方文档：*the first enabled http-request script in the profile whose pattern matches wins*）。模块脚本行会被插到配置最顶部，所以宽 pattern 会挤掉别人的脚本。**本模块已用否定断言把 `boxjs.com` / `boxjs.net` 让回给 BoxJs** —— 详见下方「抢占」。 |
 | ③ 模块脚本行按需精简 | 模块里的 `[Script]` 行会插到配置顶部、优先级最高，且**无法从 UI 单独关闭**，不需要的行请直接删掉 |
 
 > 为什么不用 Surge 原生 `[Header Rewrite]`？它是静态的：值不能带变量、不能从 BoxJs 读配置、不能按需逐条启停。需要「可选择的 k/v」就必须走脚本。
+
+### ⚠️ 关于「抢占」：一个必须知道的坑（已踩过）
+
+Surge 官方文档原话：
+
+> At most one script runs per request: **the first enabled http-request script in the profile whose pattern matches wins.**
+
+而**模块里的 `[Script]` 行会被插到配置最顶部**。所以在 VibeHeader 用全局 `^https?://` 的情况下，它会抢走所有请求 —— 包括 **BoxJs 自己的脚本**，症状是：
+
+> **BoxJs 页面能打开，但「加载数据失败」、保存失败、总开关打不开。**（BoxJs 后端脚本压根没跑）
+
+BoxJs 官方 FAQ 里对应条目：*「能进页面，但无法保存数据，也无法执行脚本」*。
+
+**所以本模块的 pattern 不是 `^https?://`，而是把 BoxJs 让出去的版本：**
+
+```ini
+pattern=^https?://(?!([^/]+\.)?boxjs\.(com|net)(?:[/:]|$))
+```
+
+**如果你还装了别的 http-request 脚本**（Cookie 抓取、其它重写），它们同样会被挤掉 —— 把它们的域名并进那个否定组即可：
+
+```ini
+pattern=^https?://(?!([^/]+\.)?(boxjs\.(com|net)|yourdomain\.com)(?:[/:]|$))
+```
+
+> 从 URL 安装的模块**在界面上改不了**，需要改 pattern 时告诉我，或者把模块内容另存成本地模块自己编辑。
+>
+> 排查手法：**临时关掉 VibeHeader 模块** → 如果 BoxJs 立刻恢复正常，就是这个问题。
 
 ---
 
@@ -122,10 +150,24 @@ force-http-engine-hosts = %APPEND% vibeheader.com
 https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/VibeHeader.panel.sgmodule
 ```
 
-装上后，面板显示在 **策略选择视图**（iOS 从 Surge 首页点进某个策略组即可看到），内容为总开关 / 规则条数 / 语法问题 / 最近命中。这个模块是自包含的（脚本行自带），不需要依赖主模块。
+装上后，面板显示在 **策略选择视图**（iOS 从 Surge 首页点进某个策略组即可看到），内容为版本 / 总开关 / 规则条数 / 语法问题 / 最近命中。这个模块是自包含的（脚本行自带），不需要依赖主模块。
 
 > Surge 文档列出的「模块可覆盖段落」清单里**没有 `[Panel]`**，但**实测在模块里写 `[Panel]` 是生效的**。
-> 模块里的 `script-update-interval=300` 是必要的：远程脚本默认缓存 24 小时，值太大时面板会一直停在静态文字。
+> 模块里的 `script-update-interval=300` 让脚本改动能自动跟进，不必手动刷新。
+
+### 更新到新版本（**不用删除重装**）
+
+地址始终不变，更新是就地完成的：
+
+| 更新什么 | 怎么操作 |
+| --- | --- |
+| **模块本身**（改脚本行 / `[Host]` / MITM 时） | Surge 首页 →「**模块**」→ 在该模块上**向左滑** → 点「**更新**」 |
+| **脚本**（绝大多数改动都在这里） | Surge 首页左上角**配置名称** →「**配置列表**」→「**外部资源**」→ 底部「**全部更新**」 |
+| 什么都不点 | 模块里已给三条脚本行写了 `script-update-interval=3600`，**最多一小时自动**取到新版脚本 |
+
+**怎么确认更新生效**：长按运行 `VibeHeaderStatus`（或看信息面板），第一行就是 `版本：v1.4.0`；自检页标题里也带版本号。版本号变了就是更新成功。
+
+> `script-update-interval` 官方默认是 86400（24 小时）—— 这是「改了脚本却迟迟没生效」最常见的原因。这里设成 3600，需要更快可在模块里临时改成 60。
 
 <details>
 <summary>手工版（不想多装一个模块时）</summary>
@@ -241,6 +283,7 @@ api.example.com/v1 add X-Vibe-By: surge
 | 现象 | 原因与处理 |
 | --- | --- |
 | 规则全都不生效 | 没开 MITM 或域名没进 MITM 列表；先打开调试开关，看自检页「最近命中」是否有记录 |
+| **BoxJs 能打开但加载数据失败 / 保存失败 / 开关打不动** | **VibeHeader 的 pattern 抢占了 BoxJs 的请求**（它自己的脚本没跑）。用本仓库当前版本即可（pattern 已排除 boxjs.com / boxjs.net）；临时验证：关掉 VibeHeader 模块看 BoxJs 是否恢复 |
 | 自检页打不开 | 依次换入口试：`http://vibeheader.com/` → `http://vibeheader.test/` → `http://192.0.2.1/` → `http://vibeheader.local/`；再确认 VibeHeader 主模块已启用（`[Host]` 映射在里面） |
 | 自检页看不到最新命中 | 浏览器缓存：点页面右上角「刷新」（自带时间戳），或换无痕窗口；也可长按运行 `VibeHeaderStatus` 对照 |
 | 长按运行 VibeHeaderStatus 没反应 | 该行是否出现在 Surge 的脚本列表里；看不到就用「万能触发」，或把那一行复制到你自己的配置里 |
