@@ -52,14 +52,21 @@ BoxJs（需先装 BoxJs 本体）→ 底部「**订阅**」→ 添加：
 https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/boxjs.vibeheader.json
 ```
 
-回到 BoxJs 首页会出现 **VibeHeader** 卡片，进去即可图形化配置 4 个选项：
+回到 BoxJs 首页会出现 **VibeHeader** 卡片，进去即可图形化配置 —— **不用手写规则**：
 
 | 设置项 | 说明 |
 | --- | --- |
 | 总开关 | 关闭后所有请求原样放行 |
-| 请求头规则 | 规则主文本域，改完保存即生效 |
+| ① 生效范围 | 对哪些域名生效，默认 `*`（全部）。多个用逗号分隔，支持 `*.a.com` 这类通配（**覆盖该后缀下所有层级子域**） |
+| ② 头名 | 要设置 / 覆盖的请求头名，例如 `x-dev` |
+| ③ 选择取值 | **单选列表**，点一下就切换（默认给了 kitty / sharpezhang / kevincheng / uranus） |
+| ④ 自定义取值 | 填了就以它为准，用于临时试列表以外的值，不必改订阅 |
+| 多条规则（高级） | 原文本域保留；与快速设置**同时生效**（快速设置排在前面） |
 | 排除域名 | 这些域名不做任何修改，优先级高于规则 |
 | 调试日志与命中记录 | 开启后写日志并在自检页记录最近 20 次命中，排查完请关掉 |
+
+> ①~④ 会被脚本拼成一条普通规则 `生效范围 set 头名: 取值`，所以自检页的规则表、最近命中、`${host}` 变量这些照旧可用。
+> ⚠️ 在 ① 里写了域名**不等于**生效 —— HTTPS 请求还需要该域名在 Surge 的 `[MITM]` 里（见下面步骤 3）。
 
 > **不装 BoxJs 也行**：脚本读的就是普通持久化键（`vibe_header_rules` 等，无前缀）。Surge Mac 可直接编辑
 > `~/Library/Application Support/com.nssurge.surge-mac/SGJSVMPersistentStore/` 下对应文件写入。

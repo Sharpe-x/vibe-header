@@ -40,6 +40,12 @@
   var K_LOG = 'vibe_header_log';
   var K_RECENT = 'vibe_header_recent';
 
+  /** BoxJs「快速设置」用的三个键（用 radios/文本控件拼一条规则，省得手写 DSL） */
+  var K_SEL_SCOPE = 'vibe_header_sel_scope';
+  var K_SEL_NAME = 'vibe_header_sel_name';
+  var K_SEL_VALUE = 'vibe_header_sel_value';
+  var K_SEL_CUSTOM = 'vibe_header_sel_custom';
+
   /** 这些头一旦改动会破坏请求报文的完整性，一律拒绝修改 */
   var PROTECTED = [
     'host', 'content-length', 'content-encoding', 'transfer-encoding',
@@ -74,6 +80,29 @@
     var v = raw(key);
     if (v === null) return !!def;
     return /^(true|1|yes|on|开|是)$/.test(v.trim().toLowerCase());
+  }
+
+  /**
+   * BoxJs「快速设置」拼出来的一行规则。
+   *   vibe_header_sel_scope   生效范围（默认 *）
+   *   vibe_header_sel_name    头名
+   *   vibe_header_sel_value   取值（radios 单选，存的是 key）
+   *   vibe_header_sel_custom  自定义取值（非空时优先）
+   * 头名没配过就返回空串 —— 保证「用户还没在 BoxJs 保存过」时行为与以前完全一致。
+   */
+  function quickRuleText() {
+    var name = raw(K_SEL_NAME);
+    if (!name) return '';
+    var custom = raw(K_SEL_CUSTOM);
+    var val = (custom !== null && custom !== '') ? custom : raw(K_SEL_VALUE);
+    if (val === null || val === '') return '';
+    var scope = raw(K_SEL_SCOPE) || '*';
+    return scope + ' set ' + name + ': ' + val + '\n';
+  }
+
+  /** 快速设置 + 手写规则，合成最终规则源（快速设置在前，相同头名时它先写入） */
+  function rulesSource() {
+    return quickRuleText() + (raw(K_RULES) || '');
   }
 
   function log() {
@@ -454,15 +483,18 @@
   function statusText() {
     var enable = flag(K_ENABLE, true);
     var debug = flag(K_LOG, false);
-    var rulesText = raw(K_RULES) || '';
+    var rulesText = rulesSource();
     var cfg = parseRules(rulesText);
     var blocks = parseList(raw(K_BLOCK));
     var recent = readRecent();
     var onCount = 0;
     for (var i = 0; i < cfg.rules.length; i++) if (cfg.rules[i].on) onCount++;
 
+    var quick = quickRuleText().trim();
+
     var lines = [];
     lines.push('总开关：' + (enable ? '开' : '关'));
+    lines.push('快速规则：' + (quick || '未启用（去 BoxJs 保存一次即生效）'));
     lines.push('规则：' + cfg.rules.length + ' 条解析成功（其中启用 ' + onCount + ' 条）');
     lines.push('排除域名：' + blocks.length + ' 个');
     lines.push('调试日志：' + (debug ? '开' : '关'));
@@ -527,9 +559,9 @@
       return done({});
     }
 
-    var rulesText = raw(K_RULES);
+    var rulesText = rulesSource();
     if (!rulesText) {
-      if (debug) log('[VibeHeader] 规则为空，请到 BoxJs 配置');
+      if (debug) log('[VibeHeader] 规则为空：BoxJs 的「快速设置」与「多条规则」都没配');
       return done({});
     }
 
@@ -578,7 +610,7 @@
 
     var enable = flag(K_ENABLE, true);
     var debug = flag(K_LOG, false);
-    var rulesText = raw(K_RULES) || '';
+    var rulesText = rulesSource();
     var cfg = parseRules(rulesText);
     var blocks = parseList(raw(K_BLOCK));
     var recent = readRecent();
@@ -687,7 +719,7 @@
   // ==========================================================================
 
   function selfCheck() {
-    var rulesText = raw(K_RULES) || '';
+    var rulesText = rulesSource();
     var cfg = parseRules(rulesText);
     var blocks = parseList(raw(K_BLOCK));
     var problems = [];

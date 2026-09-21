@@ -10,7 +10,9 @@
       "descs_html": [
         "像 Chrome 的 <b>VibeHeader</b> 插件一样，在 Surge 里按域名 / 路径给请求头做 增加 / 覆盖 / 删除。",
         "<br />",
-        "<b>规则写法</b>：<code>&lt;作用域&gt; &lt;动作&gt; &lt;头名&gt; &lt;值&gt;</code>",
+        "<b>怎么用（推荐）</b>：填好<b>头名</b>，在<b>选择取值</b>里点一个，需要时改一下<b>生效范围</b>，点保存即可 —— 不用手写规则。",
+        "<br />",
+        "<b>复杂场景</b>：用最下面的「多条规则」文本域，一行一条 <code>作用域 动作 头名 值</code>",
         "<span style='margin-left: 24px'>作用域：<code>*</code> 全部 · <code>example.com</code> 精确 · <code>*.a.com</code> 主域+全部子域 · <code>||a.com</code> 同上 · <code>api-*.a.com</code> 通配 · <code>re:^api\\.</code> 正则 · <code>a.com/api</code> 域名+路径前缀</span>",
         "<span style='margin-left: 24px'>动作：<code>set</code> 覆盖（默认） · <code>add</code> 仅在缺失时添加 · <code>del</code> 删除</span>",
         "<span style='margin-left: 24px'>行首加 <code>!</code> 临时禁用该条；<code>#</code> 开头的行是注释</span>",
@@ -22,6 +24,10 @@
       ],
       "keys": [
         "vibe_header_enable",
+        "vibe_header_sel_scope",
+        "vibe_header_sel_name",
+        "vibe_header_sel_value",
+        "vibe_header_sel_custom",
         "vibe_header_rules",
         "vibe_header_block",
         "vibe_header_log"
@@ -35,11 +41,48 @@
           "desc": "关闭后所有请求都原样放行，不做任何修改"
         },
         {
+          "id": "vibe_header_sel_scope",
+          "name": "① 生效范围",
+          "val": "*",
+          "type": "text",
+          "placeholder": "* 或 *.ess.tencent.cn, *.qian.tencent.com",
+          "desc": "这条设置对哪些域名生效。* = 全部域名；多个用逗号分隔；支持 * 通配，会同时覆盖该后缀下所有层级的子域"
+        },
+        {
+          "id": "vibe_header_sel_name",
+          "name": "② 头名",
+          "val": "x-dev",
+          "type": "text",
+          "placeholder": "x-dev",
+          "desc": "要设置 / 覆盖的请求头名（大小写不敏感；Host、Content-Length 等受保护头会被拒绝）"
+        },
+        {
+          "id": "vibe_header_sel_value",
+          "name": "③ 选择取值",
+          "val": "kitty",
+          "type": "radios",
+          "items": [
+            { "key": "kitty", "label": "kitty" },
+            { "key": "sharpezhang", "label": "sharpezhang" },
+            { "key": "kevincheng", "label": "kevincheng" },
+            { "key": "uranus", "label": "uranus" }
+          ],
+          "desc": "点一下就切换，改完点保存。想用列表以外的值，填下面的「自定义取值」"
+        },
+        {
+          "id": "vibe_header_sel_custom",
+          "name": "④ 自定义取值",
+          "val": "",
+          "type": "text",
+          "placeholder": "留空则用上面的选择",
+          "desc": "填了就以它为准（优先级高于 ③），用于临时试新值，不必改订阅"
+        },
+        {
           "id": "vibe_header_rules",
-          "name": "请求头规则",
-          "val": "# 一行一条：<作用域> <动作> <头名> <值>\n# 动作：set 覆盖 / add 仅缺失时添加 / del 删除；行首加 ! 可临时禁用\n# 下面几行仅为示例，去掉行首的 # 就会生效\n# * set X-Vibe-By: surge\n# *.example.com add X-Debug: 1\n# api.example.com/api set X-Env: ${host}\n# ! *.tracker.com del X-Device-Id",
+          "name": "多条规则（高级）",
+          "val": "# 快速设置不够用时才写这里，一行一条：作用域 动作 头名 值\n# 动作：set 覆盖 / add 仅缺失时添加 / del 删除；行首加 ! 可临时禁用\n# 下面为示例，去掉行首的 # 才会生效\n# * set X-Vibe-By: surge\n# *.example.com add X-Debug: 1\n# api.example.com/api set X-Env: ${host}\n# ! *.tracker.com del X-Device-Id",
           "type": "textarea",
-          "desc": "改完保存即生效，无需重启。也可整段填 JSON 数组：[{\"scope\":\"*.a.com\",\"op\":\"set\",\"name\":\"X-A\",\"value\":\"1\"}]"
+          "desc": "与上面的快速设置同时生效（快速设置排在前面）。也可整段填 JSON 数组：[{\"scope\":\"*.a.com\",\"op\":\"set\",\"name\":\"X-A\",\"value\":\"1\"}]"
         },
         {
           "id": "vibe_header_block",
