@@ -19,7 +19,9 @@
         "<span style='margin-left: 24px'>值中可用变量：<code>${host}</code> <code>${path}</code> <code>${method}</code> <code>${scheme}</code> <code>${port}</code></span>",
         "<br />",
         "<b>生效前提</b>：① Surge 的 MITM 必须包含目标域名（HTTPS 需解密才看得到，明文 http 不需要）；② 本模块 pattern 未被其他 http-request 脚本抢占。",
-        "<a href=\"http://vibeheader.local/\" target=\"_blank\">打开自检页（解析结果 / 语法错误 / 最近命中）</a>",
+        "<br />",
+        "<b>订阅内容版本</b>：<code>v1.4.3</code>（在 BoxJs 里更新订阅后这个号会变，可用来确认订阅是否已刷新）",
+        "<a href=\"http://vibeheader.com/\" target=\"_blank\">打开自检页（解析结果 / 语法错误 / 最近命中）</a>",
         "<a onClick=\"window.location.reload(true);\">刷新</a>"
       ],
       "keys": [
