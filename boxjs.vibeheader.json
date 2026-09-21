@@ -1,0 +1,62 @@
+{
+  "id": "local.vibeheader.sub",
+  "name": "VibeHeader 请求头管理器",
+  "author": "local",
+  "apps": [
+    {
+      "id": "local.vibeheader",
+      "name": "VibeHeader",
+      "author": "local",
+      "descs_html": [
+        "像 Chrome 的 <b>VibeHeader</b> 插件一样，在 Surge 里按域名 / 路径给请求头做 增加 / 覆盖 / 删除。",
+        "<br />",
+        "<b>规则写法</b>：<code>&lt;作用域&gt; &lt;动作&gt; &lt;头名&gt; &lt;值&gt;</code>",
+        "<span style='margin-left: 24px'>作用域：<code>*</code> 全部 · <code>example.com</code> 精确 · <code>*.a.com</code> 主域+全部子域 · <code>||a.com</code> 同上 · <code>api-*.a.com</code> 通配 · <code>re:^api\\.</code> 正则 · <code>a.com/api</code> 域名+路径前缀</span>",
+        "<span style='margin-left: 24px'>动作：<code>set</code> 覆盖（默认） · <code>add</code> 仅在缺失时添加 · <code>del</code> 删除</span>",
+        "<span style='margin-left: 24px'>行首加 <code>!</code> 临时禁用该条；<code>#</code> 开头的行是注释</span>",
+        "<span style='margin-left: 24px'>值中可用变量：<code>${host}</code> <code>${path}</code> <code>${method}</code> <code>${scheme}</code> <code>${port}</code></span>",
+        "<br />",
+        "<b>生效前提</b>：① Surge 的 MITM 必须包含目标域名（HTTPS 需解密才看得到，明文 http 不需要）；② 本模块 pattern 未被其他 http-request 脚本抢占。",
+        "<a href=\"http://vibeheader.local/\" target=\"_blank\">打开自检页（解析结果 / 语法错误 / 最近命中）</a>",
+        "<a onClick=\"window.location.reload(true);\">刷新</a>"
+      ],
+      "keys": [
+        "vibe_header_enable",
+        "vibe_header_rules",
+        "vibe_header_block",
+        "vibe_header_log"
+      ],
+      "settings": [
+        {
+          "id": "vibe_header_enable",
+          "name": "总开关",
+          "val": true,
+          "type": "boolean",
+          "desc": "关闭后所有请求都原样放行，不做任何修改"
+        },
+        {
+          "id": "vibe_header_rules",
+          "name": "请求头规则",
+          "val": "# 一行一条：<作用域> <动作> <头名> <值>\n# 动作：set 覆盖 / add 仅缺失时添加 / del 删除；行首加 ! 可临时禁用\n# 下面几行仅为示例，去掉行首的 # 就会生效\n# * set X-Vibe-By: surge\n# *.example.com add X-Debug: 1\n# api.example.com/api set X-Env: ${host}\n# ! *.tracker.com del X-Device-Id",
+          "type": "textarea",
+          "desc": "改完保存即生效，无需重启。也可整段填 JSON 数组：[{\"scope\":\"*.a.com\",\"op\":\"set\",\"name\":\"X-A\",\"value\":\"1\"}]"
+        },
+        {
+          "id": "vibe_header_block",
+          "name": "排除域名",
+          "val": "",
+          "type": "textarea",
+          "placeholder": "例如：*.bank.com, pay.example.com",
+          "desc": "这些域名不做任何修改，优先级高于上面的规则。逗号 / 空格 / 换行分隔，支持 * 通配"
+        },
+        {
+          "id": "vibe_header_log",
+          "name": "调试日志与命中记录",
+          "val": false,
+          "type": "boolean",
+          "desc": "开启后把每次命中写入 Surge 日志，并在自检页记录最近 20 次命中。排查完建议关掉"
+        }
+      ]
+    }
+  ]
+}

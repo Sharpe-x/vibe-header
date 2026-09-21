@@ -1,0 +1,44 @@
+#!name=VibeHeader（请求头管理器）
+#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://vibeheader.local/
+#!author=Sharpe-x
+#!homepage=https://github.com/Sharpe-x/vibe-header
+#!category=BoxJs
+
+# =============================================================================
+# VibeHeader for Surge
+#   配置：BoxJs（导入 boxjs.vibeheader.json，或手动添加 4 个键）
+#   自检：浏览器打开 http://vibeheader.local/
+#
+# ⚠️ 使用前必读两条硬性前提
+#   1) HTTPS 请求必须先被 MITM 解密，脚本才能看到它 —— 见文末 [MITM]
+#   2) Surge 对每个请求只会运行「一个」http-request 脚本（先匹配到的胜出）。
+#      下面 pattern 写成 ^https?:// 时，本模块会抢占 Cookie 抓取 / 其他重写脚本。
+#      如果你还装了那类脚本，请把 pattern 收窄到目标域名，例如：
+#        pattern=^https?://([^/]+\.)?(example\.com|foo\.com)/
+# =============================================================================
+
+[General]
+# 让自检页 http://vibeheader.local/ 一定走 Surge 的 HTTP 引擎
+force-http-engine-hosts = %APPEND% vibeheader.local
+
+[Script]
+# 脚本地址二选一（国内若 raw 域名不通，把下面两行的地址换成 jsDelivr 那版即可）：
+#   raw      https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js
+#   jsDelivr https://cdn.jsdelivr.net/gh/Sharpe-x/vibe-header@main/vibe-header.js
+
+# ① 主脚本：按规则改请求头
+VibeHeader = type=http-request,pattern=^https?://,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,requires-body=false
+
+# ② 可选：每天 9 点自检一次配置，只在语法写错时发通知（不需要可直接删掉这行）
+VibeHeaderSelfCheck = type=cron,cronexp="0 9 * * *",script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=check
+
+[MITM]
+# ⚠️ 必改：只有写在这里的域名，其 HTTPS 请求才会被解密，规则才可能生效。
+#    明文 http 请求不需要 MITM。多个域名用逗号分隔，支持 * 通配。
+#
+# 方案 A（推荐）：只解密你要改请求头的域名
+hostname = %APPEND% example.com
+#
+# 方案 B（谨慎）：让规则对「所有域名」生效 —— 先注释掉上面那行，再启用下面这行。
+#    这会解密全部 HTTPS 流量；使用证书固定（pinning）的 App 可能因此无法联网。
+# hostname = %APPEND% -*.apple.com, -*.icloud.com, -*.mzstatic.com, -*.crashlytics.com, *
