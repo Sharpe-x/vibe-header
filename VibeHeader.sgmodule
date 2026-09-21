@@ -1,5 +1,5 @@
 #!name=VibeHeader（请求头管理器）
-#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://vibeheader.local/
+#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://192.0.2.1/ （备用 http://vibeheader.local/）
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
@@ -20,7 +20,9 @@
 [General]
 # 明文 HTTP 的 80 端口本来就会被 Surge 自动嗅探进 HTTP 引擎（官方文档），这行只在你想用
 # 非标准端口访问自检页时才必要；保留它无害，不影响任何其它域名。
-force-http-engine-hosts = %APPEND% vibeheader.local
+# 192.0.2.1 是自检页的推荐入口（RFC 5737 测试网段，裸 IP 不需要任何 DNS 解析）；
+# vibeheader.local 里的 .local 是 mDNS 保留后缀，部分 iOS 上会解析失败。
+force-http-engine-hosts = %APPEND% vibeheader.local, 192.0.2.1
 
 [Script]
 # 脚本地址二选一（国内若 raw 域名不通，把下面两行的地址换成 jsDelivr 那版即可）：

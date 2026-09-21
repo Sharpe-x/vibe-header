@@ -12,9 +12,11 @@
  *   vibe_header_block    排除域名（不修改的域名）    逗号 / 空格 / 换行分隔
  *   vibe_header_log      调试日志 + 命中记录         "true" / "false"
  *
- * 自检页：浏览器打开 http://vibeheader.local/
+ * 自检页：浏览器打开 http://192.0.2.1/   ← 推荐：裸 IP，不需要任何 DNS 解析
+ *          或 http://vibeheader.local/  ← .local 是 mDNS 保留后缀，部分 iOS 上会解析失败
  *   /            查看总开关、规则解析结果、语法错误、最近命中
  *   /reset       清空「最近命中」记录
+ *   /?t=123      加个查询串可绕开浏览器缓存（页面上有「刷新」链接自动带时间戳）
  *
  * 看状态（不依赖浏览器，更可靠）：
  *   ① 模块里的 VibeHeaderStatus 行（type=generic）→ 在 Surge 的「脚本」列表长按运行 → 弹通知
@@ -30,8 +32,16 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.1.0';
+  var VERSION = '1.2.0';
   var LOCAL_HOST = 'vibeheader.local';
+  /**
+   * 备用入口：裸 IP，**不需要任何 DNS 解析**。
+   * 192.0.2.0/24 是 RFC 5737 保留的测试网段，公网上不存在真实主机；
+   * 连接会被 Surge 的 HTTP 引擎接住、由本脚本直接返回页面，不会真的发出去。
+   * 之所以需要它：`vibeheader.local` 里的 `.local` 是 mDNS/Bonjour 保留后缀，
+   * iOS 上可能绕过 Surge 的 DNS 去走 mDNS，结果解析失败、页面永远打不开。
+   */
+  var LOCAL_IP = '192.0.2.1';
   var MAX_RECENT = 20;
 
   var K_ENABLE = 'vibe_header_enable';
@@ -546,8 +556,8 @@
     var method = String(req.method || 'GET').toUpperCase();
     var ctx = parseUrl(req.url || '');
 
-    // 自检页
-    if (ctx.host === LOCAL_HOST) return renderPage(ctx);
+    // 自检页（假域名 与 裸 IP 两个入口都接受）
+    if (ctx.host === LOCAL_HOST || ctx.host === LOCAL_IP) return renderPage(ctx);
 
     // 万能触发：任意明文 http 网址的 /vibeheader-status 路径 → 弹通知报状态，请求照常放行
     if (/\/vibeheader-status\/?$/i.test(ctx.path)) return reportStatus(false);
@@ -637,8 +647,12 @@
     h.push('.tip{font-size:12px;color:#8a919e;border-left:3px solid rgba(128,128,128,.35);padding-left:10px;margin:12px 0}');
     h.push('</style></head><body>');
 
+    // 页面内所有链接都用「当前是怎么进来的那个地址」，两个入口各走各的
+    var selfOrigin = 'http://' + (ctx.host === LOCAL_IP ? LOCAL_IP : LOCAL_HOST);
+
     h.push('<h1>VibeHeader</h1>');
-    h.push('<div class="m">Surge 请求头管理器 · v' + VERSION + ' · ' + escHtml(nowStr()) + '</div>');
+    h.push('<div class="m">Surge 请求头管理器 · v' + VERSION + ' · ' + escHtml(nowStr()) +
+      ' · <a href="' + selfOrigin + '/?t=' + new Date().getTime() + '">刷新</a></div>');
 
     h.push('<div class="kv">总开关：<b class="' + (enable ? 'on' : 'off') + '">' + (enable ? '已开启' : '已关闭') + '</b></div>');
     h.push('<div class="kv">调试日志 / 命中记录：<b class="' + (debug ? 'on' : 'off') + '">' + (debug ? '已开启' : '已关闭') + '</b></div>');
@@ -674,7 +688,8 @@
     // 最近命中
     h.push('<h2>最近命中' + (recent.length ? '（' + recent.length + ' 条）' : '') + '</h2>');
     if (!recent.length) {
-      h.push('<div class="empty">暂无记录。' + (debug ? '去触发一次目标 App 的请求再回来刷新。' : '到 BoxJs 打开「调试日志」后才会记录。') + '</div>');
+      h.push('<div class="empty">暂无记录。' + (debug ? '去触发一次目标 App 的请求，再回来点上面的「刷新」。' : '到 BoxJs 打开「调试日志」后才会记录。') +
+        '<br>若明明有记录却看不到，多半是浏览器缓存 —— 点上面的「刷新」（带时间戳）或换无痕窗口。</div>');
     } else {
       h.push('<table><tr><th>时间</th><th>方法</th><th>主机</th><th>路径</th><th>动作</th><th>头名</th><th>值</th></tr>');
       for (var k = recent.length - 1; k >= 0; k--) {
@@ -690,14 +705,17 @@
           '</tr>');
       }
       h.push('</table>');
-      h.push('<div class="m"><a href="http://' + LOCAL_HOST + '/reset">清空命中记录</a></div>');
+      h.push('<div class="m"><a href="' + selfOrigin + '/reset">清空命中记录</a></div>');
     }
 
     h.push('<h2>排查提示</h2>');
     h.push('<div class="tip">1. <b>HTTPS 必须 MITM</b>：只有加入 Surge MITM hostname 列表的域名，脚本才能看到其请求；明文 http 不需要。<br>' +
       '2. <b>一个请求只会运行一个 http-request 脚本</b>：本模块 pattern 为全局时，会抢占 Cookie 抓取类脚本，建议把 pattern 收窄到目标域名。<br>' +
       '3. 规则改了立刻生效，不需要重启 Surge；但 <b>已在连接中的会话</b>不受影响。<br>' +
-      '4. 头部如 Host / Content-Length 等属于受保护头，规则不会生效。</div>');
+      '4. 头部如 Host / Content-Length 等属于受保护头，规则不会生效。<br>' +
+      '5. <b>本页打不开</b>（尤其 iOS）：' + escHtml(LOCAL_HOST) + ' 里的 .local 是 mDNS 保留后缀，' +
+      '系统可能绕过 Surge 的 DNS 去走 mDNS 导致解析失败。改用<b>裸 IP 入口</b>即可，不需要任何解析：' +
+      '<code>http://' + escHtml(LOCAL_IP) + '/</code></div>');
 
     h.push('</body></html>');
 
