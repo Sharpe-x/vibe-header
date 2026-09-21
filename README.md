@@ -95,16 +95,33 @@ Surge → **脚本** → 找到 **VibeHeaderStatus** → **长按 → 运行**�
 
 > ⚠️ 已知问题：这个假域名页面在部分设备上会出现「Surge 里显示 200、浏览器却一片空白」，原因未完全定位（已做 `body` / `data` 双字段兼容兜底）。**优先用 ① 或 ②。**
 
-**④ 信息面板（可选，需要你自己加配置）**
+**④ 信息面板（推荐：装一个模块就有，不用改你自己的配置）**
 
-信息面板更直观（iOS 上显示在**策略选择视图**里），但**模块不能定义 `[Panel]` 段**，需要你在自己的配置里加一行：
-
-```ini
-[Panel]
-VibeHeader = title="VibeHeader",content="点刷新读取状态",style=info,script-name=VibeHeaderStatus,update-interval=1
+```
+https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/VibeHeader.panel.sgmodule
 ```
 
-`VibeHeaderStatus` 就是模块里那条 `type=generic` 脚本行（模块已提供，不用重复声明）。
+装上后，面板显示在 **策略选择视图**（iOS 从 Surge 首页点进某个策略组即可看到），内容为总开关 / 规则条数 / 语法问题 / 最近命中。这个模块是自包含的（脚本行自带），不需要依赖主模块。
+
+> Surge 文档列出的「模块可覆盖段落」清单里**没有 `[Panel]`**，但**实测在模块里写 `[Panel]` 是生效的**。
+> 模块里的 `script-update-interval=300` 是必要的：远程脚本默认缓存 24 小时，值太大时面板会一直停在静态文字。
+
+<details>
+<summary>手工版（不想多装一个模块时）</summary>
+
+在你自己的配置里加这两行：
+
+```ini
+[Script]
+VibeHeaderPanel = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status,script-update-interval=300
+
+[Panel]
+VibeHeader = title="VibeHeader",content="点刷新读取状态",style=info,script-name=VibeHeaderPanel,update-interval=1
+```
+
+注意：如果已经装了上面的面板模块，就**不要**再在配置里写同名 `[Panel]`，否则会出现重复面板。
+
+</details>
 
 此外模块每天 9 点自检一次配置，**只在语法有错时发通知**；`VibeHeaderSelfCheck` 那行可以直接删掉。
 
@@ -230,6 +247,7 @@ api.example.com/v1 add X-Vibe-By: surge
 | --- | --- |
 | `vibe-header.js` | 核心脚本（http-request 类型）：读配置 → 匹配域名 → 改请求头；同时提供自检页与 cron 自检模式 |
 | `VibeHeader.sgmodule` | Surge 模块：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`force-http-engine-hosts`、MITM 域名列表 |
+| `VibeHeader.panel.sgmodule` | Surge 模块（可选）：只注册一个信息面板，装上即在策略选择视图里看到状态 |
 | `boxjs.vibeheader.json` | BoxJs 订阅文件：导入后得到可视化配置面板 |
 | `README.md` | 本文档 |
 
