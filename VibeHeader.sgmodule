@@ -1,5 +1,5 @@
 #!name=VibeHeader（请求头管理器）
-#!desc=像 Chrome 的 VibeHeader 插件一样按域名/路径对请求头做增删改，配置在 BoxJs。自检页 http://vibeheader.com/ ｜ 模块 v1.4.2（已修复抢占 BoxJs 请求的问题）
+#!desc=像 Chrome 的 VibeHeader 插件一样按域名/路径对请求头做增删改，配置在 BoxJs。自检页 http://vibeheader.com/ ｜ 模块 v1.4.4（关闭总开关后完全静默）
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs

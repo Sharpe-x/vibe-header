@@ -43,7 +43,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.4.2';
+  var VERSION = '1.4.4';
 
   /**
    * 自检页入口主机名（三个都接受，任选一个能打开的用）。
@@ -786,6 +786,12 @@
   // ==========================================================================
 
   function selfCheck() {
+    // 总开关关闭 = 用户不用了 —— 这时完全静默，不该每天 9 点还收到「规则为空」之类的提醒
+    if (!flag(K_ENABLE, true)) {
+      log('[VibeHeader] 总开关已关闭，跳过自检（不通知）');
+      return done({});
+    }
+
     var rulesText = rulesSource();
     var cfg = parseRules(rulesText);
     var blocks = parseList(raw(K_BLOCK));

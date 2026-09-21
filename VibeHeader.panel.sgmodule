@@ -1,5 +1,5 @@
 #!name=VibeHeader 信息面板
-#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到版本、总开关、规则条数、语法问题和最近命中。面板自动刷新时静默，不会弹通知。｜ 模块 v1.4.2
+#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到版本、总开关、规则条数、语法问题和最近命中。面板自动刷新时静默，不会弹通知。｜ 模块 v1.4.4
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
