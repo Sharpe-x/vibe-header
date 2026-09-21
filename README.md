@@ -49,6 +49,31 @@ pattern=^https?://(?!([^/]+\.)?(boxjs\.(com|net)|yourdomain\.com)(?:[/:]|$))
 >
 > 排查手法：**临时关掉 VibeHeader 模块** → 如果 BoxJs 立刻恢复正常，就是这个问题。
 
+#### 不想冒这个风险？装「窄范围版」
+
+否定断言 `(?!...)` 是 ICU 正则的合法语法，但**社区里的 Surge 模块几乎没人这么写**（实测检索 GitHub 上
+`pattern=^https?://` 的模块，没有一个用否定断言），所以在个别 Surge 版本上是否稳定生效，我无法在真机验证。
+
+**`VibeHeader.narrow.sgmodule`** 用「显式域名列表」替代否定断言，**从原理上就不可能匹配到 `boxjs.com`**：
+
+```ini
+pattern=^https?://([^/]+\.)?(ess\.tencent\.cn|qian\.tencent\.com|qian\.tencent\.cn|vibeheader\.com|vibeheader\.test|vibeheader\.local|192\.0\.2\.1)
+```
+
+```
+https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/VibeHeader.narrow.sgmodule
+```
+
+| | 标准版 | 窄范围版 |
+| --- | --- | --- |
+| 生效范围 | **所有域名**（除 BoxJs） | **只有 pattern 里列出的域名** |
+| BoxJs 会不会被抢 | 靠否定断言排除（理论可行，未在真机验证） | **不可能被抢** |
+| 规则写 `*`（全部域名） | 生效 | 只对列表内域名生效 |
+| 加域名 | 不用改 | 需要改 pattern（告诉我，或存成本地模块自己改） |
+
+**取舍**：如果你只在固定几个域名上改请求头 → 窄范围版更省心；如果你需要 `*` 全局生效 → 只能用标准版。
+
+
 ---
 
 ## 1. 安装（3 步）
@@ -368,7 +393,8 @@ v1.4.4 起，关闭总开关后**连每日自检也静默**，不会再来打扰
 | 文件 | 作用 |
 | --- | --- |
 | `vibe-header.js` | 核心脚本（http-request 类型）：读配置 → 匹配域名 → 改请求头；同时提供自检页与 cron 自检模式 |
-| `VibeHeader.sgmodule` | Surge 模块：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`[Host]` 自检页域名映射、`force-http-engine-hosts`、MITM 域名列表 |
+| `VibeHeader.sgmodule` | Surge 模块（标准版）：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`[Host]` 自检页域名映射、`force-http-engine-hosts`、MITM 域名列表。pattern 为全局 + 排除 BoxJs |
+| `VibeHeader.narrow.sgmodule` | Surge 模块（窄范围版）：同上，但 pattern 是**显式域名列表**，从原理上不可能抢到 BoxJs 或其它脚本的请求。**不想冒风险就用这个** |
 | `VibeHeader.panel.sgmodule` | Surge 模块（可选）：只注册一个信息面板，装上即在策略选择视图里看到状态 |
 | `boxjs.vibeheader.json` | BoxJs 订阅文件：导入后得到可视化配置面板 |
 | `README.md` | 本文档 |

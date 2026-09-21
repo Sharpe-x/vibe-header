@@ -1,0 +1,51 @@
+#!name=VibeHeader（窄范围版 · 只对指定域名生效）
+#!desc=与标准版功能相同，但 pattern 用「显式域名列表」而不是全局匹配 —— 因此**绝不会抢到 BoxJs 或其它脚本的请求**，可以放心和你其它 Surge 配置共存。要加域名就改下面的 pattern。｜ 模块 v1.4.5
+#!author=Sharpe-x
+#!homepage=https://github.com/Sharpe-x/vibe-header
+#!category=BoxJs
+
+# =============================================================================
+# 这个模块和 VibeHeader.sgmodule 的区别只有一处：http-request 脚本的 pattern
+#
+#   标准版： pattern=^https?://(?!([^/]+\.)?boxjs\.(com|net)(?:[/:]|$))
+#            → 全局生效（除 BoxJs），靠「否定断言」把 BoxJs 让回去
+#   本版本： pattern=^https?://([^/]+\.)?(ess\.tencent\.cn|qian\.tencent\.com|...)
+#            → 只匹配列表里的域名，**根本不可能匹配到 boxjs.com**，因此不依赖任何正则特性
+#
+# Surge 对每个请求只运行一个 http-request 脚本（先匹配到的胜出），所以：
+#   ⚠️ 用本版本时，**规则里写的作用域也必须落在下面的域名列表内**，否则那条规则不会触发。
+#      例：列表里有 *.ess.tencent.cn，那么 `*.ess.tencent.cn set x-dev: kitty` 有效；
+#          但 `*.example.com set x:` 不会生效（该域名不在列表里）。
+#      需要新域名就把它加进 pattern 的括号里，用 | 分隔。
+#
+# 其余部分（[Host] 自检页映射 / force-http-engine-hosts / MITM / cron / 状态行）与标准版一致。
+# =============================================================================
+
+[Host]
+# 自检页的「假域名」由 Surge 直接给出解析结果 → 不依赖真实 DNS
+# 192.0.2.0/24 是 RFC 5737 保留的测试网段，公网上不存在真实主机，请求不会真的发出去
+vibeheader.com = 192.0.2.1
+www.vibeheader.com = 192.0.2.1
+vibeheader.test = 192.0.2.1
+vibeheader.local = 192.0.2.1
+
+[General]
+force-http-engine-hosts = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, 192.0.2.1
+
+[Script]
+# ① 主脚本：只匹配下面这些域名（**改这里就能增减域名**）
+#    · 末尾的 vibeheader.* 与 192.0.2.1 是自检页自己的入口，**请保留**
+#    · ess.tencent.cn / qian.tencent.com / qian.tencent.cn 前面的 ([^/]+\.)? 表示
+#      「可有可无的多级子域」，所以 *.ess.tencent.cn 下所有层级都覆盖
+VibeHeader = type=http-request,pattern=^https?://([^/]+\.)?(ess\.tencent\.cn|qian\.tencent\.com|qian\.tencent\.cn|vibeheader\.com|vibeheader\.test|vibeheader\.local|192\.0\.2\.1),script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,requires-body=false,script-update-interval=3600
+
+# ② 每天 9 点自检（只在语法写错时通知；总开关关闭时完全静默）
+VibeHeaderSelfCheck = type=cron,cronexp="0 9 * * *",script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=check,script-update-interval=3600
+
+# ③ 长按运行看状态（type=generic 不参与「每个请求一个 http-request 脚本」的竞争）
+VibeHeaderStatus = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status,script-update-interval=3600
+
+[MITM]
+# ⚠️ 必改：HTTPS 请求必须写进这里才会被解密，规则才可能生效。
+#    vibeheader.* 三条是自检页自己的域名，请保留；example.com 是占位符，换成你的目标域名。
+hostname = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, example.com
