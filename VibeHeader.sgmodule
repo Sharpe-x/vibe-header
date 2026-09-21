@@ -1,13 +1,14 @@
 #!name=VibeHeader（请求头管理器）
-#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://192.0.2.1/ （备用 http://vibeheader.local/）
+#!desc=像 Chrome 的 VibeHeader 插件一样，按域名 / 路径对请求头做增加、覆盖、删除。配置在 BoxJs 里，支持多规则、逐条启用与域名范围限定。自检页：http://vibeheader.com/
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
 
 # =============================================================================
 # VibeHeader for Surge
-#   配置：BoxJs（导入 boxjs.vibeheader.json，或手动添加 4 个键）
-#   自检：浏览器打开 http://vibeheader.local/
+#   配置：BoxJs（导入 boxjs.vibeheader.json，或手动添加 8 个键）
+#   自检：浏览器打开 http://vibeheader.com/
+#         （备用入口 http://vibeheader.test/ 与 http://192.0.2.1/，三个都指向同一页面）
 #
 # ⚠️ 使用前必读两条硬性前提
 #   1) HTTPS 请求必须先被 MITM 解密，脚本才能看到它 —— 见文末 [MITM]
@@ -17,19 +18,30 @@
 #        pattern=^https?://([^/]+\.)?(example\.com|foo\.com)/
 # =============================================================================
 
+[Host]
+# 让自检页的「假域名」一定能被解析出来 —— 这是整条链路的第一道门槛：
+#   客户端必须能解析出 IP，才会有 TCP 连接；有连接 Surge 才能嗅探到它是明文 HTTP、
+#   交给 HTTP 引擎、进而交给 VibeHeader 脚本应答。
+# 这里直接由 Surge 给出解析结果，因此**不依赖真实 DNS**（对方换 IP、被污染、被墙都不影响）。
+# 192.0.2.0/24 是 RFC 5737 保留的测试网段，公网上不存在真实主机，请求不会真的发出去。
+# 与 BoxJs 用 http://boxjs.com 是同一套机制（BoxJs 只靠 force-http-engine-hosts；
+# 我们额外加了这层映射，比它更稳）。
+vibeheader.com = 192.0.2.1
+www.vibeheader.com = 192.0.2.1
+vibeheader.test = 192.0.2.1
+vibeheader.local = 192.0.2.1
+
 [General]
-# 明文 HTTP 的 80 端口本来就会被 Surge 自动嗅探进 HTTP 引擎（官方文档），这行只在你想用
-# 非标准端口访问自检页时才必要；保留它无害，不影响任何其它域名。
-# 192.0.2.1 是自检页的推荐入口（RFC 5737 测试网段，裸 IP 不需要任何 DNS 解析）；
-# vibeheader.local 里的 .local 是 mDNS 保留后缀，部分 iOS 上会解析失败。
-force-http-engine-hosts = %APPEND% vibeheader.local, 192.0.2.1
+# 允许 http / https 的自检页都走 Surge 的 HTTP 引擎（BoxJs 模块里的同款写法）。
+# 说明：明文 HTTP 的 80 端口本来就会被 Surge 自动嗅探，这行主要是为 https:// 自检页兜底。
+force-http-engine-hosts = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, 192.0.2.1
 
 [Script]
 # 脚本地址二选一（国内若 raw 域名不通，把下面两行的地址换成 jsDelivr 那版即可）：
 #   raw      https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js
 #   jsDelivr https://cdn.jsdelivr.net/gh/Sharpe-x/vibe-header@main/vibe-header.js
 
-# ① 主脚本：按规则改请求头
+# ① 主脚本：按规则改请求头（同时负责应答自检页）
 VibeHeader = type=http-request,pattern=^https?://,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,requires-body=false
 
 # ② 可选：每天 9 点自检一次配置，只在语法写错时发通知（不需要可直接删掉这行）
@@ -44,8 +56,10 @@ VibeHeaderStatus = type=generic,script-path=https://raw.githubusercontent.com/Sh
 # ⚠️ 必改：只有写在这里的域名，其 HTTPS 请求才会被解密，规则才可能生效。
 #    明文 http 请求不需要 MITM。多个域名用逗号分隔，支持 * 通配。
 #
-# 方案 A（推荐）：只解密你要改请求头的域名
-hostname = %APPEND% example.com
+# 三个 vibeheader.* 是自检页自己的域名（保留不动，让 https 方式访问自检页也能应答）；
+# example.com 只是占位符 —— 请替换成你真正要改请求头的域名，例如：
+#   hostname = %APPEND% vibeheader.com, *.ess.tencent.cn, *.qian.tencent.com, *.qian.tencent.cn
+hostname = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, example.com
 #
 # 方案 B（谨慎）：让规则对「所有域名」生效 —— 先注释掉上面那行，再启用下面这行。
 #    这会解密全部 HTTPS 流量；使用证书固定（pinning）的 App 可能因此无法联网。

@@ -77,8 +77,8 @@ https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/boxjs.vibeheader.jso
 
 ```ini
 [MITM]
-# 方案 A：只解密你要改请求头的域名
-hostname = %APPEND% example.com, *.foo.com
+# 方案 A：只解密你要改请求头的域名（vibeheader.* 是自检页自己的域名，保留别删）
+hostname = %APPEND% vibeheader.com, www.vibeheader.com, vibeheader.test, vibeheader.local, example.com, *.foo.com
 
 # 方案 B：让规则对所有域名生效（先注释掉上一行再启用这行）
 # hostname = %APPEND% -*.apple.com, -*.icloud.com, -*.mzstatic.com, -*.crashlytics.com, *
@@ -96,11 +96,25 @@ Surge → **脚本** → 找到 **VibeHeaderStatus** → **长按 → 运行**�
 
 打开任意一个**能正常解析的真实域名**的 `http://` 网址，把路径写成 `/vibeheader-status`，例如 `http://neverssl.com/vibeheader-status`。页面会照常打开，同时弹出一条状态通知。（请求本身不做任何修改）
 
-**③ 自检页（辅助，请用裸 IP 打开）**
+**③ 自检页（推荐用域名打开）**
 
-浏览器打开 **`http://192.0.2.1/`** —— 明文 http，**不需要 MITM，也不需要任何 DNS 解析**：总开关 / 调试开关 / 排除域名、每条规则的解析结果、**语法错误清单**、最近 20 次命中；`/reset` 清空命中记录。右上角的「刷新」链接自带时间戳，用来绕开浏览器缓存。
+浏览器打开 **`http://vibeheader.com/`** —— 总开关 / 调试开关 / 排除域名、每条规则的解析结果、**语法错误清单**、最近 20 次命中；`/reset` 清空命中记录。右上角的「刷新」链接自带时间戳，用来绕开浏览器缓存。
 
-> 也可以用 `http://vibeheader.local/`，但 `.local` 是 mDNS/Bonjour 的保留后缀，**部分 iOS 上会解析失败**（表现就是"打不开"）—— 这正是 `192.0.2.1` 这个入口存在的原因：它在 RFC 5737 保留的测试网段里，保证不会连到真实主机；连接会被 Surge 的 HTTP 引擎接住，由脚本直接返回页面。
+这就是 BoxJs 用 `http://boxjs.com` 的同一套机制：一个「假域名」，由模块保证它一定能被解析、且请求被脚本就地应答。具体靠模块里的两行：
+
+```ini
+[Host]
+vibeheader.com = 192.0.2.1          # 由 Surge 直接给出解析结果，不依赖真实 DNS
+
+[General]
+force-http-engine-hosts = %APPEND% vibeheader.com
+```
+
+`192.0.2.0/24` 是 RFC 5737 保留的测试网段，公网上不存在真实主机，**请求不会真的发到公网**。因为解析是 Surge 给的，所以真实 DNS 怎么变（换 IP、被污染、被墙）都不影响这个页面。
+
+> 三个备用入口，打不开就换一个：`http://vibeheader.test/`（`.test` 是 RFC 2606 保留后缀，永不会被真实注册）、`http://192.0.2.1/`（裸 IP，不需要任何解析）、`http://vibeheader.local/`（`.local` 是 mDNS 保留后缀，**部分 iOS 上会解析失败**，仅作最后备选）。
+>
+> 若 `http://vibeheader.com/` 打不开：确认 **VibeHeader 主模块已启用**（`[Host]` 映射在它里面）；也可以在 Surge → 请求记录里搜 `vibeheader.com` 看那条请求的状态。
 
 **④ 信息面板（推荐：装一个模块就有，不用改你自己的配置）**
 
@@ -227,7 +241,7 @@ api.example.com/v1 add X-Vibe-By: surge
 | 现象 | 原因与处理 |
 | --- | --- |
 | 规则全都不生效 | 没开 MITM 或域名没进 MITM 列表；先打开调试开关，看自检页「最近命中」是否有记录 |
-| 自检页打不开 | 改用裸 IP 入口 `http://192.0.2.1/` —— `vibeheader.local` 里的 `.local` 是 mDNS 保留后缀，部分 iOS 上解析不了 |
+| 自检页打不开 | 依次换入口试：`http://vibeheader.com/` → `http://vibeheader.test/` → `http://192.0.2.1/` → `http://vibeheader.local/`；再确认 VibeHeader 主模块已启用（`[Host]` 映射在里面） |
 | 自检页看不到最新命中 | 浏览器缓存：点页面右上角「刷新」（自带时间戳），或换无痕窗口；也可长按运行 `VibeHeaderStatus` 对照 |
 | 长按运行 VibeHeaderStatus 没反应 | 该行是否出现在 Surge 的脚本列表里；看不到就用「万能触发」，或把那一行复制到你自己的配置里 |
 | 万能触发不弹通知 | 路径必须完全匹配 `/vibeheader-status`；且要用**明文 http** 的网址打开 |
@@ -254,7 +268,7 @@ api.example.com/v1 add X-Vibe-By: surge
 | 文件 | 作用 |
 | --- | --- |
 | `vibe-header.js` | 核心脚本（http-request 类型）：读配置 → 匹配域名 → 改请求头；同时提供自检页与 cron 自检模式 |
-| `VibeHeader.sgmodule` | Surge 模块：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`force-http-engine-hosts`、MITM 域名列表 |
+| `VibeHeader.sgmodule` | Surge 模块：注册三条脚本行（改请求头 / 每日自检 / 长按看状态）、`[Host]` 自检页域名映射、`force-http-engine-hosts`、MITM 域名列表 |
 | `VibeHeader.panel.sgmodule` | Surge 模块（可选）：只注册一个信息面板，装上即在策略选择视图里看到状态 |
 | `boxjs.vibeheader.json` | BoxJs 订阅文件：导入后得到可视化配置面板 |
 | `README.md` | 本文档 |

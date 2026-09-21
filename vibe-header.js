@@ -12,11 +12,20 @@
  *   vibe_header_block    排除域名（不修改的域名）    逗号 / 空格 / 换行分隔
  *   vibe_header_log      调试日志 + 命中记录         "true" / "false"
  *
- * 自检页：浏览器打开 http://192.0.2.1/   ← 推荐：裸 IP，不需要任何 DNS 解析
- *          或 http://vibeheader.local/  ← .local 是 mDNS 保留后缀，部分 iOS 上会解析失败
+ * 自检页：浏览器打开 http://vibeheader.com/   ← 推荐（和 BoxJs 的 http://boxjs.com 同一套机制）
+ *          备用 http://vibeheader.test/      ← .test 是 RFC 2606 保留后缀，永远不会被真实注册
+ *          备用 http://192.0.2.1/            ← 裸 IP，不需要任何 DNS 解析
+ *          备用 http://vibeheader.local/     ← .local 是 mDNS 保留后缀，部分 iOS 上会解析失败
  *   /            查看总开关、规则解析结果、语法错误、最近命中
  *   /reset       清空「最近命中」记录
  *   /?t=123      加个查询串可绕开浏览器缓存（页面上有「刷新」链接自动带时间戳）
+ *
+ * 为什么 vibeheader.com 这个「假域名」能打开：
+ *   主机名必须在客户端能解析出 IP，才会有 TCP 连接；有了连接，Surge 才能嗅探到它是明文 HTTP、
+ *   交给 HTTP 引擎、进而交给本脚本。模块里做了两件事保证这一步成立：
+ *     ① [Host] vibeheader.com = 192.0.2.1  —— 由 Surge 直接给出解析结果，完全不依赖真实 DNS；
+ *     ② force-http-engine-hosts 追加该域名 —— 与 BoxJs 模块同样的写法。
+ *   解析成功后请求被本脚本就地应答，**不会真的发往公网**。
  *
  * 看状态（不依赖浏览器，更可靠）：
  *   ① 模块里的 VibeHeaderStatus 行（type=generic）→ 在 Surge 的「脚本」列表长按运行 → 弹通知
@@ -26,20 +35,29 @@
  * 自检模式：当模块脚本行带 argument=check（cron 触发）时，仅做配置校验，
  *          只在发现语法错误时发通知，成功时静默。
  *
- * 版本：1.1.0
+ * 版本：1.3.0
  */
 
 (function () {
   'use strict';
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.3.0';
+
+  /**
+   * 自检页入口主机名（三个都接受，任选一个能打开的用）。
+   * 主入口 `vibeheader.com` 是「假域名」：模块里用 [Host] 把它映射到 RFC 5737 测试网段，
+   * 由 Surge 直接给出解析结果，因此不依赖真实 DNS，也不会真的连到公网。
+   * 这与 BoxJs 用 `http://boxjs.com` 是同一套机制（BoxJs 模块里是
+   * force-http-engine-hosts + pattern，我们额外加了 [Host] 映射，更稳）。
+   */
+  var LOCAL_DOMAIN = 'vibeheader.com';
+  /** 备用假域名。`.test` 是 RFC 2606 保留后缀，永远不会被真实注册 —— 更"干净"的备选 */
+  var LOCAL_DOMAIN_TEST = 'vibeheader.test';
   var LOCAL_HOST = 'vibeheader.local';
   /**
    * 备用入口：裸 IP，**不需要任何 DNS 解析**。
    * 192.0.2.0/24 是 RFC 5737 保留的测试网段，公网上不存在真实主机；
    * 连接会被 Surge 的 HTTP 引擎接住、由本脚本直接返回页面，不会真的发出去。
-   * 之所以需要它：`vibeheader.local` 里的 `.local` 是 mDNS/Bonjour 保留后缀，
-   * iOS 上可能绕过 Surge 的 DNS 去走 mDNS，结果解析失败、页面永远打不开。
    */
   var LOCAL_IP = '192.0.2.1';
   var MAX_RECENT = 20;
@@ -67,6 +85,15 @@
     set: 'set', add: 'add', del: 'del',
     '覆盖': 'set', '设置': 'set', '追加': 'add', '添加': 'add', '删除': 'del'
   };
+
+  /** 这个主机名是不是「自检页自己的入口」（vibeheader.com/.test 及其子域 / .local / 裸 IP） */
+  function isSelfHost(host) {
+    var h = String(host || '').toLowerCase().replace(/\.$/, '');
+    if (!h) return false;
+    if (h === LOCAL_HOST || h === LOCAL_IP) return true;
+    // 允许 www.vibeheader.com 这类子域
+    return /(^|\.)vibeheader\.(com|test)$/.test(h);
+  }
 
   // ==========================================================================
   // 基础工具
@@ -556,8 +583,8 @@
     var method = String(req.method || 'GET').toUpperCase();
     var ctx = parseUrl(req.url || '');
 
-    // 自检页（假域名 与 裸 IP 两个入口都接受）
-    if (ctx.host === LOCAL_HOST || ctx.host === LOCAL_IP) return renderPage(ctx);
+    // 自检页（域名 / .local / 裸 IP 三个入口都接受）
+    if (isSelfHost(ctx.host)) return renderPage(ctx);
 
     // 万能触发：任意明文 http 网址的 /vibeheader-status 路径 → 弹通知报状态，请求照常放行
     if (/\/vibeheader-status\/?$/i.test(ctx.path)) return reportStatus(false);
@@ -577,7 +604,7 @@
 
     var cfg = parseRules(rulesText);
     if (!cfg.rules.length) {
-      if (debug) log('[VibeHeader] 没有可用的规则' + (cfg.errors.length ? '（' + cfg.errors.length + ' 个语法错误，打开 http://' + LOCAL_HOST + '/ 查看）' : ''));
+      if (debug) log('[VibeHeader] 没有可用的规则' + (cfg.errors.length ? '（' + cfg.errors.length + ' 个语法错误，打开 http://' + LOCAL_DOMAIN + '/ 查看）' : ''));
       return done({});
     }
 
@@ -612,7 +639,7 @@
   }
 
   // ==========================================================================
-  // 自检页 http://vibeheader.local/
+  // 自检页 http://vibeheader.com/（备用 192.0.2.1 / vibeheader.local）
   // ==========================================================================
 
   function renderPage(ctx) {
@@ -647,8 +674,8 @@
     h.push('.tip{font-size:12px;color:#8a919e;border-left:3px solid rgba(128,128,128,.35);padding-left:10px;margin:12px 0}');
     h.push('</style></head><body>');
 
-    // 页面内所有链接都用「当前是怎么进来的那个地址」，两个入口各走各的
-    var selfOrigin = 'http://' + (ctx.host === LOCAL_IP ? LOCAL_IP : LOCAL_HOST);
+    // 页面内所有链接都用「当前是怎么进来的那个入口」，三个入口各走各的
+    var selfOrigin = 'http://' + ctx.host;
 
     h.push('<h1>VibeHeader</h1>');
     h.push('<div class="m">Surge 请求头管理器 · v' + VERSION + ' · ' + escHtml(nowStr()) +
@@ -713,9 +740,14 @@
       '2. <b>一个请求只会运行一个 http-request 脚本</b>：本模块 pattern 为全局时，会抢占 Cookie 抓取类脚本，建议把 pattern 收窄到目标域名。<br>' +
       '3. 规则改了立刻生效，不需要重启 Surge；但 <b>已在连接中的会话</b>不受影响。<br>' +
       '4. 头部如 Host / Content-Length 等属于受保护头，规则不会生效。<br>' +
-      '5. <b>本页打不开</b>（尤其 iOS）：' + escHtml(LOCAL_HOST) + ' 里的 .local 是 mDNS 保留后缀，' +
-      '系统可能绕过 Surge 的 DNS 去走 mDNS 导致解析失败。改用<b>裸 IP 入口</b>即可，不需要任何解析：' +
-      '<code>http://' + escHtml(LOCAL_IP) + '/</code></div>');
+      '5. <b>本页打不开</b>时换另一个入口试（都指向同一个页面）：' +
+      '<code>http://' + escHtml(LOCAL_DOMAIN) + '/</code>（推荐）、' +
+      '<code>http://' + escHtml(LOCAL_DOMAIN_TEST) + '/</code>、' +
+      '<code>http://' + escHtml(LOCAL_IP) + '/</code>（裸 IP，不需要任何解析）、' +
+      '<code>http://' + escHtml(LOCAL_HOST) + '/</code>。<br>' +
+      '&nbsp;&nbsp;&nbsp;这几个域名靠模块里的 <code>[Host]</code> 映射解析到测试 IP，' +
+      '不依赖真实 DNS。若都打不开：确认模块已启用，或直接在 Surge 里搜 <code>vibeheader.com</code> ' +
+      '看那条请求的状态。</div>');
 
     h.push('</body></html>');
 
