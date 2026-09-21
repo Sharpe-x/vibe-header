@@ -1,5 +1,5 @@
 #!name=VibeHeader 信息面板
-#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到版本、总开关、规则条数、语法问题和最近命中。｜ 模块 v1.4.1
+#!desc=给 VibeHeader 加一个信息面板：在 Surge 的策略选择视图里直接看到版本、总开关、规则条数、语法问题和最近命中。面板自动刷新时静默，不会弹通知。｜ 模块 v1.4.2
 #!author=Sharpe-x
 #!homepage=https://github.com/Sharpe-x/vibe-header
 #!category=BoxJs
@@ -9,6 +9,11 @@
 #   · 面板显示位置：iOS 上是「策略选择视图」（从 Surge 首页点进某个策略组就能看到）
 #   · 面板内容由 vibe-header.js 以 argument=status 模式渲染
 #   · 自包含：脚本行随模块一起提供，不需要另外装 VibeHeader 主模块
+#
+# 通知策略（v1.4.2 起）：
+#   · 面板按 update-interval 自动刷新时 → **静默**，只更新卡片内容，绝不弹通知
+#   · 你主动点面板（$trigger === 'button'）→ 更新卡片 + 弹一条通知
+#   （早期版本在面板自动刷新时也发通知，配 update-interval=1 会变成每秒一条，已修掉）
 #
 # 更新方式（不用删除重装）：Surge →「模块」→ 在模块上向左滑 →「更新」
 # 官方文档里「模块可覆盖的段落」清单没有列 [Panel]，但实测模块里写 [Panel] 是生效的。
@@ -21,5 +26,8 @@
 VibeHeaderPanel = type=generic,script-path=https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/vibe-header.js,argument=status,script-update-interval=300
 
 [Panel]
-# update-interval=1：每次切到策略选择视图都重新求值，保证状态是最新的；想省电可改成 60。
+# update-interval=1：官方文档说 Surge 会在「切到策略选择视图时」检查是否到期，所以写 1
+#   等于每次点开面板都刷一次，你看到的是最新状态。
+#   ⚠️ 它同时也是「自动求值」的间隔，早期脚本在这个路径下发通知 → 会变成每秒一条。
+#   现在自动求值已改为完全静默，所以这个值可以放心留小；想省电可以改成 60。
 VibeHeader = title="VibeHeader",content="点刷新读取状态",style=info,script-name=VibeHeaderPanel,update-interval=1

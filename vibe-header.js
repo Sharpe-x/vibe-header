@@ -30,7 +30,9 @@
  * 看状态（不依赖浏览器，更可靠）：
  *   ① 模块里的 VibeHeaderStatus 行（type=generic）→ 在 Surge 的「脚本」列表长按运行 → 弹通知
  *   ② 浏览器访问任意明文 http 网址的 /vibeheader-status 路径 → 同样弹通知，请求照常放行
- *   ③ 作为 Surge 信息面板脚本时（$input.purpose === 'panel'）返回面板内容
+ *   ③ 作为 Surge 信息面板脚本时（$input.purpose === 'panel'）返回面板内容。
+ *      ⚠️ 面板会按 update-interval 反复求值（每秒级），所以**自动刷新时一律不发通知**；
+ *      只有用户主动点面板（$trigger === 'button'）才额外弹一条通知。
  *
  * 自检模式：当模块脚本行带 argument=check（cron 触发）时，仅做配置校验，
  *          只在发现语法错误时发通知，成功时静默。
@@ -41,7 +43,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.4.1';
+  var VERSION = '1.4.2';
 
   /**
    * 自检页入口主机名（三个都接受，任选一个能打开的用）。
@@ -514,7 +516,8 @@
   //   出口一：Surge「脚本」列表里长按本脚本手动运行（模块里那条 argument=status 的 generic 行）
   //   出口二：浏览器访问任意明文 http 网址的 /vibeheader-status 路径（请求本身照常放行）
   //   出口三（可选）：作为 Surge 信息面板的脚本（$input.purpose === 'panel'）
-  //   三者都调用 reportStatus()：发一条通知 + 返回面板对象
+  //   三个出口都走 reportStatus()，但**通知策略不同**：只有用户主动触发才发通知，
+  //   面板按 interval 自动刷新时保持静默（详见 reportStatus 注释）。
   // ==========================================================================
 
   function statusText() {
@@ -560,18 +563,25 @@
   }
 
   /**
-   * asPanel=true 时同时返回面板对象（$done({title,content,style})）；
-   * 手动运行 generic 脚本 / 万能路径触发时只发通知，并让请求照常放行。
+   * 输出状态。三个出口，**发不发通知是刻意区分开的**：
+   *
+   *   'panel-auto'   —— 信息面板按 update-interval 自动求值（每秒级、反复发生）
+   *                     → **只更新面板内容，绝不发通知**（否则会疯狂刷屏）
+   *   'panel-button' —— 用户主动点了面板（$trigger === 'button'）
+   *                     → 更新面板 + 发一条通知
+   *   'notice'       —— 长按运行脚本 / 访问 /vibeheader-status（都是用户主动触发）
+   *                     → 发一条通知，请求照常放行
    */
-  function reportStatus(asPanel) {
+  function reportStatus(mode) {
     var t = statusText();
     log('[VibeHeader] 状态\n' + t);
-    notify('VibeHeader 状态', '', t);
-    if (asPanel) {
-      var hasErr = /⚠️/.test(t);
-      return done({ title: 'VibeHeader', content: t, style: hasErr ? 'alert' : 'info' });
+    if (mode === 'notice') {
+      notify('VibeHeader 状态', '', t);
+      return done({});
     }
-    return done({});
+    if (mode === 'panel-button') notify('VibeHeader 状态', '', t);
+    var hasErr = /⚠️/.test(t);
+    return done({ title: 'VibeHeader', content: t, style: hasErr ? 'alert' : 'info' });
   }
 
   // ==========================================================================
@@ -588,7 +598,7 @@
     if (isSelfHost(ctx.host)) return renderPage(ctx);
 
     // 万能触发：任意明文 http 网址的 /vibeheader-status 路径 → 弹通知报状态，请求照常放行
-    if (/\/vibeheader-status\/?$/i.test(ctx.path)) return reportStatus(false);
+    if (/\/vibeheader-status\/?$/i.test(ctx.path)) return reportStatus('notice');
 
     var debug = flag(K_LOG, false);
 
@@ -802,7 +812,12 @@
   try {
     var ARG = (typeof $argument !== 'undefined' && $argument !== null) ? String($argument) : '';
     var IS_PANEL = (typeof $input !== 'undefined' && $input && $input.purpose === 'panel');
-    if (IS_PANEL || /\bstatus\b/i.test(ARG)) reportStatus(IS_PANEL);
+    // Surge 用 $trigger 告诉我们这次为什么被调用：
+    //   'button'       —— 用户主动点了面板（想要反馈）
+    //   'auto-interval'—— 按 update-interval 自动刷新（必须静默，否则会刷屏）
+    var TRIGGER = (typeof $trigger !== 'undefined' && $trigger) ? String($trigger) : '';
+    if (IS_PANEL) reportStatus(TRIGGER === 'button' ? 'panel-button' : 'panel-auto');
+    else if (/\bstatus\b/i.test(ARG)) reportStatus('notice');
     else if (/\bcheck\b/i.test(ARG)) selfCheck();
     else handleRequest();
   } catch (e) {

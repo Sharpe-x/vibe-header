@@ -155,6 +155,18 @@ https://raw.githubusercontent.com/Sharpe-x/vibe-header/main/VibeHeader.panel.sgm
 > Surge 文档列出的「模块可覆盖段落」清单里**没有 `[Panel]`**，但**实测在模块里写 `[Panel]` 是生效的**。
 > 模块里的 `script-update-interval=300` 让脚本改动能自动跟进，不必手动刷新。
 
+**通知策略（v1.4.2 起）—— 面板不会再刷屏：**
+
+| 触发方式 | 面板卡片 | 通知 |
+| --- | --- | --- |
+| 面板**自动刷新**（`update-interval`，每秒级反复发生） | 更新 | **静默，不发** |
+| 你**主动点面板**（`$trigger === 'button'`） | 更新 | 弹一条 |
+| 长按运行 `VibeHeaderStatus` | — | 弹一条 |
+| `/vibeheader-status` 路径触发 | — | 弹一条 |
+| 每日 cron 自检 | — | **仅语法有错时**弹一条 |
+
+依据：Surge 文档里面板脚本的入参带 `$trigger`，值为 `"button"`（用户点了刷新）或 `"auto-interval"`（自动刷新）。早期版本在两种情况都发通知，配上 `update-interval=1` 就变成每秒一条 —— **这是设计缺陷，已修**。
+
 ### 更新到新版本（**不用删除重装**）
 
 地址始终不变，更新是就地完成的：
